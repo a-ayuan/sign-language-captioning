@@ -1,0 +1,35 @@
+project:
+  name: base_wlasl_ctc
+  output_root: outputs/runs/base_wlasl_ctc
+  seed: 42
+
+data:
+  train_manifest: outputs/wlasl_features/manifests/train.csv
+  val_manifest: outputs/wlasl_features/manifests/val.csv
+  test_manifest: outputs/wlasl_features/manifests/test.csv
+  vocab_path: outputs/wlasl_features/manifests/vocab.json
+  num_workers: 0
+  batch_size: 8
+  max_frames: 128
+  input_dim: 450
+
+model:
+  hidden_size: 384
+  num_layers: 2
+  dropout: 0.2
+  bidirectional: true
+
+optimizer:
+  lr: 0.001
+  weight_decay: 0.0001
+
+training:
+  epochs: 40
+  grad_clip_norm: 1.0
+  early_stopping_patience: 10
+  device: cpu
+
+streaming:
+  window_size: 32
+  stride: 8
+  commit_repeats: 2

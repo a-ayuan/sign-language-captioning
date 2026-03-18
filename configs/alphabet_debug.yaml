@@ -1,0 +1,5 @@
+dataset:
+  root: data/signalphaset
+  image_size: 224
+  max_items: 500
+output_dir: outputs/alphabet_debug
