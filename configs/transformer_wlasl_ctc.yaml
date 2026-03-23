@@ -1,0 +1,36 @@
+project:
+  name: transformer_wlasl_ctc
+  output_root: outputs/runs/transformer_wlasl_ctc
+  seed: 42
+
+data:
+  train_manifest: outputs/wlasl_features/manifests/train.csv
+  val_manifest: outputs/wlasl_features/manifests/val.csv
+  test_manifest: outputs/wlasl_features/manifests/test.csv
+  vocab_path: outputs/wlasl_features/manifests/vocab.json
+  num_workers: 0
+  batch_size: 8
+  max_frames: 128
+  input_dim: 492  # Updated for enhanced features
+
+model:
+  type: transformer
+  d_model: 384
+  nhead: 8
+  num_layers: 4
+  dropout: 0.1
+
+optimizer:
+  lr: 0.0005
+  weight_decay: 0.0001
+
+training:
+  epochs: 50
+  grad_clip_norm: 1.0
+  early_stopping_patience: 10
+  device: cpu
+
+streaming:
+  window_size: 32
+  stride: 8
+  commit_repeats: 2
