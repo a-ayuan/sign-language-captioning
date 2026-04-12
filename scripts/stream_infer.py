@@ -8,7 +8,7 @@ import torch
 from slc.config import Config
 from slc.datasets.wlasl import infer_feature_dim_from_manifest
 from slc.inference.streaming import SlidingWindowStreamer
-from slc.models.bilstm_ctc import BiLSTMCTC
+from slc.models.factory import build_model
 from slc.preprocessing.landmarks import LandmarkExtractor
 from slc.preprocessing.normalization import normalize_landmark_sequence
 from slc.preprocessing.video_io import iter_video_frames
@@ -44,13 +44,11 @@ def main() -> None:
             f"input_dim={detected_input_dim}. Using detected_input_dim={detected_input_dim}."
         )
 
-    model = BiLSTMCTC(
+    model = build_model(
+        model_config=config["model"],
         input_dim=input_dim,
-        hidden_size=int(config["model"]["hidden_size"]),
-        num_layers=int(config["model"]["num_layers"]),
         vocab_size=len(vocab),
-        dropout=float(config["model"]["dropout"]),
-        bidirectional=bool(config["model"]["bidirectional"]),
+        max_len=int(config["data"]["max_frames"]),
     ).to(device)
 
     state = torch.load(args.checkpoint, map_location=device)

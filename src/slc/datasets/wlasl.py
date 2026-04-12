@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
@@ -6,6 +8,8 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+
+from slc.preprocessing.augmentation import LandmarkAugmenter
 
 
 @dataclass
@@ -22,10 +26,12 @@ class WLASLFeatureDataset(Dataset):
         manifest_path: str | Path,
         vocab: Dict[str, int],
         max_frames: int,
+        augmenter: LandmarkAugmenter | None = None,
     ) -> None:
         self.manifest = pd.read_csv(manifest_path)
         self.vocab = vocab
         self.max_frames = max_frames
+        self.augmenter = augmenter
 
     def __len__(self) -> int:
         return len(self.manifest)
@@ -35,13 +41,21 @@ class WLASLFeatureDataset(Dataset):
         data = np.load(row["feature_path"])
         features = data["features"].astype(np.float32)
         features = features[: self.max_frames]
+
+        if self.augmenter is not None:
+            features = self.augmenter.augment_sequence(features)
+
         input_length = features.shape[0]
         label_tokens = [self.vocab[token] for token in row["label_text"].split()]
+        if not label_tokens:
+            raise ValueError(f"Encountered empty label_text at index={index} in manifest={row}")
         target = np.asarray(label_tokens, dtype=np.int64)
+        class_target = int(target[0])
 
         return {
             "features": torch.from_numpy(features),
             "targets": torch.from_numpy(target),
+            "class_target": class_target,
             "input_length": input_length,
             "target_length": len(target),
             "label_text": row["label_text"],
@@ -53,6 +67,7 @@ def collate_wlasl_batch(batch: List[Dict[str, torch.Tensor | str | int]]) -> Dic
     feature_tensors = [item["features"] for item in batch]
     input_lengths = torch.tensor([int(item["input_length"]) for item in batch], dtype=torch.long)
     target_lengths = torch.tensor([int(item["target_length"]) for item in batch], dtype=torch.long)
+    class_targets = torch.tensor([int(item["class_target"]) for item in batch], dtype=torch.long)
     labels = [str(item["label_text"]) for item in batch]
     paths = [str(item["feature_path"]) for item in batch]
 
@@ -67,6 +82,7 @@ def collate_wlasl_batch(batch: List[Dict[str, torch.Tensor | str | int]]) -> Dic
     return {
         "features": padded,
         "targets": targets,
+        "class_targets": class_targets,
         "input_lengths": input_lengths,
         "target_lengths": target_lengths,
         "label_texts": labels,

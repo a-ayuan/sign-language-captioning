@@ -1,0 +1,3 @@
+feature_path,label_text,num_frames,split
+outputs/tmp_sanity2/hello.npz,hello,12,train
+outputs/tmp_sanity2/bye.npz,bye,13,train

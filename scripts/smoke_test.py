@@ -8,7 +8,7 @@ def main() -> None:
     root = Path("outputs/smoke_test")
     root.mkdir(parents=True, exist_ok=True)
     feature_path = root / "sample.npz"
-    np.savez_compressed(feature_path, features=np.random.randn(24, 225).astype(np.float32))
+    np.savez_compressed(feature_path, features=np.random.randn(24, 450).astype(np.float32))
     pd.DataFrame(
         [
             {

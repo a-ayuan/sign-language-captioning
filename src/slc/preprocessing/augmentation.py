@@ -1,69 +1,99 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
 import numpy as np
-from typing import List
+
+from slc.preprocessing.normalization import BASE_FEATURE_DIMS
 
 
+@dataclass
 class LandmarkAugmenter:
-    """Data augmentation for landmark sequences."""
-
-    def __init__(self, prob_temporal_interpolate=0.3, prob_spatial_jitter=0.2,
-                 prob_temporal_flip=0.15, prob_spatial_scale=(0.8, 1.2)):
-        self.prob_temporal_interpolate = prob_temporal_interpolate
-        self.prob_spatial_jitter = prob_spatial_jitter
-        self.prob_temporal_flip = prob_temporal_flip
-        self.spatial_scale_range = prob_spatial_scale
+    rotation_degrees: float = 10.0
+    gaussian_noise_std: float = 1e-3
+    temporal_speed_min: float = 0.9
+    temporal_speed_max: float = 1.1
+    frame_dropout_prob: float = 0.03
 
     def augment_sequence(self, features: np.ndarray) -> np.ndarray:
-        """Apply random augmentations to a landmark sequence."""
-        augmented = features.copy()
-
-        # Temporal interpolations
-        if np.random.random() < self.prob_temporal_interpolate:
-            augmented = self._temporal_interpolate(augmented)
-
-        # Spatial jitter
-        if np.random.random() < self.prob_spatial_jitter:
-            augmented = self._spatial_jitter(augmented)
-
-        # Temporal flip
-        if np.random.random() < self.prob_temporal_flip:
-            augmented = self._temporal_flip(augmented)
-
-        # Spatial scaling
-        scale_factor = np.random.uniform(self.spatial_scale_range[0], self.spatial_scale_range[1])
-        augmented = self._spatial_scale(augmented, scale_factor)
-
-        return augmented
-
-    def _temporal_interpolate(self, features: np.ndarray) -> np.ndarray:
-        """Insert interpolated frames to handle speed variation."""
-        if features.shape[0] < 2:
+        if features.size == 0:
             return features
 
-        # Randomly insert interpolated frames
-        new_frames = []
-        for i in range(features.shape[0] - 1):
-            new_frames.append(features[i])
-            if np.random.random() < 0.5:  # 50% chance to interpolate between frames
-                interpolated = (features[i] + features[i + 1]) / 2
-                new_frames.append(interpolated)
+        if features.ndim != 2 or features.shape[1] < BASE_FEATURE_DIMS:
+            raise ValueError(
+                f"Expected prepared feature matrix with at least {BASE_FEATURE_DIMS} columns, got {features.shape}."
+            )
 
-        new_frames.append(features[-1])
-        return np.stack(new_frames, axis=0)
+        spatial = features[:, :BASE_FEATURE_DIMS].copy()
+        spatial = self._rotate_xy(spatial)
+        spatial = self._time_warp(spatial)
+        spatial = self._frame_dropout(spatial)
+        spatial = self._gaussian_noise(spatial)
+        velocity = self._temporal_delta(spatial)
+        return np.concatenate([spatial, velocity], axis=1).astype(np.float32)
 
-    def _spatial_jitter(self, features: np.ndarray, std: float = 0.02) -> np.ndarray:
-        """Add Gaussian noise to landmarks (signer variation)."""
-        noise = np.random.normal(0, std, features.shape)
-        return features + noise
+    def _rotate_xy(self, spatial: np.ndarray) -> np.ndarray:
+        if self.rotation_degrees <= 0:
+            return spatial
 
-    def _temporal_flip(self, features: np.ndarray) -> np.ndarray:
-        """Mirror frames (mirrors are common in ASL videos)."""
-        return features[::-1].copy()
+        angle = np.deg2rad(np.random.uniform(-self.rotation_degrees, self.rotation_degrees))
+        rotation = np.array(
+            [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+            dtype=np.float32,
+        )
 
-    def _spatial_scale(self, features: np.ndarray, scale: float) -> np.ndarray:
-        """Random scale (distance from camera varies)."""
-        # Only scale the spatial coordinates, not additional features
-        # Assuming first part is spatial landmarks
-        spatial_dim = 450  # Base landmark dimensions
-        scaled_features = features.copy()
-        scaled_features[:, :spatial_dim] *= scale
-        return scaled_features
+        rotated = spatial.copy().reshape(spatial.shape[0], -1, 3)
+        rotated[:, :, :2] = rotated[:, :, :2] @ rotation.T
+        return rotated.reshape(spatial.shape[0], -1)
+
+    def _time_warp(self, spatial: np.ndarray) -> np.ndarray:
+        if spatial.shape[0] < 2 or self.temporal_speed_min == 1.0 == self.temporal_speed_max:
+            return spatial
+
+        speed = np.random.uniform(self.temporal_speed_min, self.temporal_speed_max)
+        if abs(speed - 1.0) < 1e-3:
+            return spatial
+
+        original_time = np.arange(spatial.shape[0], dtype=np.float32)
+        warped_time = np.linspace(0, spatial.shape[0] - 1, max(2, int(round(spatial.shape[0] / speed))), dtype=np.float32)
+        warped = np.empty((warped_time.shape[0], spatial.shape[1]), dtype=np.float32)
+        for feature_idx in range(spatial.shape[1]):
+            warped[:, feature_idx] = np.interp(warped_time, original_time, spatial[:, feature_idx])
+
+        target_time = np.linspace(0, warped.shape[0] - 1, spatial.shape[0], dtype=np.float32)
+        restored = np.empty_like(spatial)
+        for feature_idx in range(spatial.shape[1]):
+            restored[:, feature_idx] = np.interp(target_time, np.arange(warped.shape[0], dtype=np.float32), warped[:, feature_idx])
+        return restored
+
+    def _frame_dropout(self, spatial: np.ndarray) -> np.ndarray:
+        if self.frame_dropout_prob <= 0 or spatial.shape[0] < 3:
+            return spatial
+
+        dropped = spatial.copy()
+        keep_mask = np.random.random(spatial.shape[0]) >= self.frame_dropout_prob
+        keep_mask[0] = True
+        keep_mask[-1] = True
+        if keep_mask.all():
+            return dropped
+
+        valid_idx = np.flatnonzero(keep_mask)
+        for feature_idx in range(spatial.shape[1]):
+            dropped[:, feature_idx] = np.interp(
+                np.arange(spatial.shape[0], dtype=np.float32),
+                valid_idx.astype(np.float32),
+                spatial[valid_idx, feature_idx],
+            )
+        return dropped
+
+    def _gaussian_noise(self, spatial: np.ndarray) -> np.ndarray:
+        if self.gaussian_noise_std <= 0:
+            return spatial
+        noise = np.random.normal(0.0, self.gaussian_noise_std, size=spatial.shape).astype(np.float32)
+        return spatial + noise
+
+    def _temporal_delta(self, spatial: np.ndarray) -> np.ndarray:
+        deltas = np.zeros_like(spatial)
+        if spatial.shape[0] > 1:
+            deltas[1:] = spatial[1:] - spatial[:-1]
+        return deltas

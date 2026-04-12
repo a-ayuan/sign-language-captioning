@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from typing import List
+
+import torch
 
 
 def _edit_distance(tokens_a: List[str], tokens_b: List[str]) -> int:
@@ -40,6 +44,15 @@ def compute_edit_distance_rate(truths: List[str], preds: List[str]) -> float:
         total_distance += _edit_distance(truth_tokens, pred_tokens)
         total_tokens += max(1, len(truth_tokens))
     return total_distance / total_tokens
+
+
+def compute_topk_accuracy(logits: torch.Tensor, targets: torch.Tensor, k: int) -> float:
+    if logits.numel() == 0:
+        return 0.0
+    k = min(k, logits.size(1))
+    topk = logits.topk(k=k, dim=1).indices
+    matches = topk.eq(targets.unsqueeze(1)).any(dim=1)
+    return float(matches.float().mean().item())
 
 
 def compute_caption_churn(prefixes: List[str]) -> float:

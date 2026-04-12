@@ -58,8 +58,12 @@ class SlidingWindowStreamer:
                     continue
                 tensor = torch.from_numpy(chunk).unsqueeze(0).float().to(device)
                 lengths = torch.tensor([tensor.shape[1]], dtype=torch.long, device=device)
-                log_probs, _ = model(tensor, lengths)
-                decoded = greedy_ctc_decode(log_probs[0], blank_index=blank_index, index_to_token=index_to_token)
+                log_probs, _, clip_logits = model(tensor, lengths)
+                if clip_logits is not None:
+                    predicted = int(clip_logits[0].argmax(dim=-1).item())
+                    decoded = [index_to_token[predicted]]
+                else:
+                    decoded = greedy_ctc_decode(log_probs[0], blank_index=blank_index, index_to_token=index_to_token)
                 committed = list(self._commit_prefix(decoded))
                 outputs.append(
                     StreamingResult(

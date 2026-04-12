@@ -1,4 +1,5 @@
 import argparse
+from collections import Counter
 from pathlib import Path
 from typing import Dict, List
 
@@ -28,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input-root", type=str, default="data/wlasl_processed")
     parser.add_argument("--output-root", type=str, required=True)
     parser.add_argument("--max-frames", type=int, default=96)
+    parser.add_argument("--top-k", type=int, default=0, help="Use the K most frequent glosses across all splits. 0 keeps all classes.")
     parser.add_argument(
         "--dataset-slug",
         type=str,
@@ -52,6 +54,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _select_top_k_labels(split_to_samples: Dict[str, List[tuple[str, str]]], top_k: int) -> set[str]:
+    counts: Counter[str] = Counter()
+    for samples in split_to_samples.values():
+        for label_text, _ in samples:
+            counts[label_text] += 1
+    if top_k <= 0 or top_k >= len(counts):
+        return set(counts.keys())
+    return {label for label, _ in counts.most_common(top_k)}
+
+
 def main() -> None:
     args = parse_args()
 
@@ -71,19 +83,26 @@ def main() -> None:
     feature_root = ensure_dir(output_root / "features")
     manifest_root = ensure_dir(output_root / "manifests")
 
+    split_to_samples: Dict[str, List[tuple[str, str]]] = {}
+    for split in ["train", "val", "test"]:
+        split_root = input_root / split
+        split_to_samples[split] = discover_split_videos(split_root) if split_root.exists() else []
+
+    selected_labels = _select_top_k_labels(split_to_samples, top_k=int(args.top_k))
+    if args.top_k > 0:
+        print(f"Keeping top-{args.top_k} glosses by frequency. Selected {len(selected_labels)} labels.")
+
     extractor = LandmarkExtractor()
     vocab: Dict[str, int] = {"<blank>": 0}
     summary_rows: List[Dict[str, str | int | float]] = []
 
     try:
         for split in ["train", "val", "test"]:
-            split_root = input_root / split
-            if not split_root.exists():
-                continue
-
             rows = []
-            split_samples = discover_split_videos(split_root)
+            split_samples = split_to_samples[split]
             for label_text, video_path_str in tqdm(split_samples, desc=f"prepare_{split}"):
+                if label_text not in selected_labels:
+                    continue
                 if label_text not in vocab:
                     vocab[label_text] = len(vocab)
 
@@ -91,6 +110,8 @@ def main() -> None:
                 frames = list(iter_video_frames(video_path, max_frames=args.max_frames))
                 raw_features = extractor.extract_sequence(frames)
                 normalized = normalize_landmark_sequence(raw_features)
+                if normalized.shape[0] == 0:
+                    continue
 
                 out_name = f"{split}_{label_text}_{video_path.stem}.npz"
                 feature_path = feature_root / out_name
