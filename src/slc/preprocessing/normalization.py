@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import numpy as np
 
 from slc.constants import COORDS, HAND_LANDMARKS, POSE_LANDMARKS

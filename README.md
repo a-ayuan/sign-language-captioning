@@ -194,6 +194,7 @@ Training outputs include checkpoints, metrics history, validation predictions, a
 
 ```bash
 python scripts/evaluate_ctc.py --config configs/base_wlasl_ctc.yaml --checkpoint outputs/runs/base_wlasl_ctc/checkpoints/best.pt
+python scripts/evaluate_ctc.py --config configs/transformer_wlasl_ctc.yaml --checkpoint outputs/runs/transformer_wlasl_ctc/checkpoints/best.pt
 ```
 
 ## Streaming inference

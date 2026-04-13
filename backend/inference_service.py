@@ -1,9 +1,6 @@
-from __future__ import annotations
-
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
 
 import torch
 from fastapi import UploadFile
@@ -11,7 +8,7 @@ from fastapi import UploadFile
 from slc.config import Config
 from slc.datasets.wlasl import infer_feature_dim_from_manifest
 from slc.inference.streaming import SlidingWindowStreamer
-from slc.models.bilstm_ctc import BiLSTMCTC
+from slc.models.transformer_ctc import TransformerCTC
 from slc.preprocessing.landmarks import LandmarkExtractor
 from slc.preprocessing.normalization import normalize_landmark_sequence
 from slc.preprocessing.video_io import iter_video_frames
@@ -44,14 +41,16 @@ class InferenceService:
                 f"input_dim={detected_input_dim}. Using detected_input_dim={detected_input_dim}."
             )
 
-        self.model = BiLSTMCTC(
+        self.model = TransformerCTC(
             input_dim=self.input_dim,
-            hidden_size=int(self.config["model"]["hidden_size"]),
-            num_layers=int(self.config["model"]["num_layers"]),
             vocab_size=len(self.vocab),
+            d_model=int(self.config["model"]["d_model"]),
+            nhead=int(self.config["model"]["nhead"]),
+            num_layers=int(self.config["model"]["num_layers"]),
+            dim_feedforward=int(self.config["model"].get("dim_feedforward", 1024)),
             dropout=float(self.config["model"]["dropout"]),
-            bidirectional=bool(self.config["model"]["bidirectional"]),
-            projection_size=int(self.config["model"].get("projection_size", 0)) or None,
+            max_len=int(self.config["model"].get("max_len", self.config["data"]["max_frames"])),
+            # projection_size=int(self.config["model"].get("projection_size", 0)) or None,
             input_dropout=float(self.config["model"].get("input_dropout", 0.1)),
         ).to(self.device)
 
@@ -111,6 +110,7 @@ class InferenceService:
                 f"Streaming feature width mismatch: model expects input_dim={self.input_dim}, "
                 f"but extracted video features have width={features.shape[1]}."
             )
+
         local_streamer = SlidingWindowStreamer(
             window_size=int(self.config["streaming"]["window_size"]),
             stride=int(self.config["streaming"]["stride"]),

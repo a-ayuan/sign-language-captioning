@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -11,8 +9,8 @@ from .schemas import InferenceResponse
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATH = ROOT / "configs" / "base_wlasl_ctc.yaml"
-CHECKPOINT_PATH = ROOT / "outputs" / "runs" / "base_wlasl_ctc" / "checkpoints" / "best.pt"
+CONFIG_PATH = ROOT / "configs" / "transformer_wlasl_ctc.yaml"
+CHECKPOINT_PATH = ROOT / "outputs" / "runs" / "transformer_wlasl_ctc" / "checkpoints" / "best.pt"
 FRONTEND_DIST = ROOT / "frontend" / "dist"
 
 app = FastAPI(title="Sign Language Captioning UI API")
