@@ -54,7 +54,7 @@ training:
   epochs: 50
   grad_clip_norm: 1.0
   early_stopping_patience: 10
-  device: cpu
+  device: cuda
 
 streaming:
   window_size: 32
