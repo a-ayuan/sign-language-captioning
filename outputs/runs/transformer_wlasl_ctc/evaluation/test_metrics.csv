@@ -1,0 +1,2 @@
+test_loss,test_exact_match,test_token_error_rate,test_top5_accuracy
+4.384809395846198,0.33587786259541985,0.6641221374045801,0.5710784319569083
