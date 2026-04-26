@@ -1,0 +1,2 @@
+feature_path,label_text,num_frames,split
+outputs\smoke_test\sample.npz,hello,24,train
