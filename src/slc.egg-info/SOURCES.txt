@@ -17,6 +17,7 @@ src/slc/inference/decoder.py
 src/slc/inference/streaming.py
 src/slc/models/__init__.py
 src/slc/models/bilstm_ctc.py
+src/slc/models/factory.py
 src/slc/models/transformer_ctc.py
 src/slc/preprocessing/__init__.py
 src/slc/preprocessing/augmentation.py
@@ -25,6 +26,7 @@ src/slc/preprocessing/normalization.py
 src/slc/preprocessing/video_io.py
 src/slc/training/__init__.py
 src/slc/training/engine.py
+src/slc/training/samplers.py
 src/slc/utils/__init__.py
 src/slc/utils/io.py
 src/slc/utils/metrics.py

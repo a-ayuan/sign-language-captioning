@@ -26,7 +26,13 @@ def save_training_curves(history_df: pd.DataFrame, output_path: str | Path) -> N
     plt.close(fig)
 
 
-def save_confusion_matrix(truths: List[str], preds: List[str], output_path: str | Path, max_classes: int = 20) -> None:
+def save_confusion_matrix(
+    truths: List[str], 
+    preds: List[str], 
+    output_path: str | Path, 
+    model_name: str = "Base BiLSTM",
+    max_classes: int = 20
+) -> None:
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if not truths:
@@ -38,11 +44,15 @@ def save_confusion_matrix(truths: List[str], preds: List[str], output_path: str 
     filtered_preds = [pred if pred in keep else "<other>" for truth, pred in zip(truths, preds) if truth in keep]
     labels = sorted(list(keep | {"<other>"}))
 
-    matrix = confusion_matrix(filtered_truths, filtered_preds, labels=labels)
+    matrix = confusion_matrix(filtered_truths, filtered_preds, labels=labels, normalize='true')
     fig = plt.figure(figsize=(10, 8))
     plt.imshow(matrix, interpolation="nearest")
-    plt.title("Validation Confusion Matrix")
-    plt.colorbar()
+    
+    plt.title(f"Validation Confusion Matrix: {model_name}")
+    
+    cbar = plt.colorbar()
+    cbar.set_label("Proportion of True Class", rotation=270, labelpad=15)
+    
     plt.xticks(range(len(labels)), labels, rotation=90)
     plt.yticks(range(len(labels)), labels)
     plt.tight_layout()
